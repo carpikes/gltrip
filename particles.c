@@ -1,3 +1,18 @@
+/*
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -6,15 +21,33 @@
 #include <unistd.h>
 #include <GL/gl.h>
 #include <SDL/SDL.h>
-#include <pthread.h>
+
+#if defined(WIN32) || defined(_WIN32)
+	#include <windows.h>
+	#define THREAD_T DWORD
+	#define THREAD_RET DWORD WINAPI
+	#define THREAD_EXIT return 0
+	#define MAIN int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdLine, int nShow)
+	#define CREATE_THREAD(x,y,z) CreateThread(NULL, NULL, y, z, NULL, x)
+#else
+	#include <pthread.h>
+	#define THREAD_T pthread_t
+	#define THREAD_RET void *
+	#define THREAD_EXIT pthread_exit(NULL)
+	#define MAIN int main(int argc, char *argv[])
+	#define CREATE_THREAD(x,y,z) pthread_create(x, NULL, y, z)
+#endif
 
 /* set here your screen resolution */
-#define WIDTH                1920
-#define HEIGHT               1080
+#define WIDTH                1024
+#define HEIGHT               768
 #define BPP                  32
 
 /* particle count */
-#define N 100000
+#define N 50000
+
+/* number of threads: how many cores do you have? */
+#define THREADS 2
 
 /* acceleration limiter */
 #define ACLIM 8000.0f
@@ -31,16 +64,13 @@
 
 #define BOUNCE_ON_BORDERS
 
-/* number of threads: how many cores do you have? */
-#define THREADS 4
-
 /* particle size */
 #define PSIZE 1.0f
 
 /* gravity center weight */
 #define M 100000000.0f
 
-#define RANDF               (rand()/(float)RAND_MAX)
+#define RANDF (rand()/(float)RAND_MAX)
 
 typedef struct
 {
@@ -55,8 +85,8 @@ typedef struct
 	int to;
 } thread_s;
 
-static int xM, yM, cM = 0;
-static int stop = 0;
+static volatile int xM, yM, cM = 0;
+static volatile int stop = 0;
 
 SDL_Surface *surface;
 particle_s particles[N];
@@ -106,7 +136,7 @@ void loop_particles(int from, int to, float updateTime)
 
 			/* acceleration limiter */
 			if(mAccel<-ACLIM) mAccel=-ACLIM;
-	
+
 			/* get angle between particle and gravity center */
 			ang = atan2(y1,x1);
 
@@ -182,7 +212,7 @@ void event(SDL_Event *e)
 {
 	int x, y, s;
 
-	if(e->type==SDL_QUIT || (e->type==SDL_KEYDOWN && 
+	if(e->type==SDL_QUIT || (e->type==SDL_KEYDOWN &&
 				e->key.keysym.sym==SDLK_ESCAPE))
 		stop = 1;
 
@@ -203,7 +233,6 @@ void render()
 	particle_s *p;
 
 	glClear(GL_COLOR_BUFFER_BIT);
-	glAccum(GL_RETURN, 0.99f);
 
 	glClear(GL_ACCUM_BUFFER_BIT);
 
@@ -231,8 +260,6 @@ void render()
 	}
 	glEnd();
 	SDL_GL_SwapBuffers();
-
-	glAccum(GL_ACCUM,0.9f);
 }
 
 long msec()
@@ -242,7 +269,7 @@ long msec()
 	return tv.tv_sec * 1000 + tv.tv_usec/1000;
 }
 
-void *particles_thread(void *arg)
+THREAD_RET particles_thread(void *arg)
 {
 	long tmr, lastRefresh;
 	thread_s *t = (thread_s *) arg;
@@ -259,16 +286,17 @@ void *particles_thread(void *arg)
 		if(tmr<30)
 			SDL_Delay(30-tmr);
 	}
-	
-	pthread_exit(NULL);
+
+	THREAD_EXIT;
 }
 
-int main(int argc, char *argv[])
+
+MAIN
 {
 	int i;
 	long tmr;
-	
-	pthread_t threads[THREADS];
+
+	THREAD_T threads[THREADS];
 	SDL_Event e;
 	thread_s tmp[THREADS];
 
@@ -282,7 +310,7 @@ int main(int argc, char *argv[])
 		tmp[i].from = (N/THREADS)*i;
 		tmp[i].to = (N/THREADS)*(i+1);
 
-		pthread_create(&threads[i], NULL, particles_thread, (void *)&tmp[i]);
+		CREATE_THREAD(&threads[i], particles_thread, ((void *)&tmp[i]));
 	}
 
 	while(!stop)
@@ -302,4 +330,3 @@ int main(int argc, char *argv[])
 	SDL_Quit();
 	return 0;
 }
-
