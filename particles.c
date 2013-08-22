@@ -16,15 +16,11 @@
 /* particle count */
 #define N 100000
 
-
 /* acceleration limiter */
-#define MM 5.0f
-
-/* speed limiter */
-#define MAXMAX 80.0f
+#define ACLIM 8000.0f
 
 /* fluid friction */
-#define ATTR 0.03f
+#define ATTR 1.8f
 
 /* particles transparency: 0.10 if you enable USE_LINES,
  * otherwise keep > 0.30 */
@@ -33,14 +29,16 @@
 /* draw lines instead of pixels */
 /*#define USE_LINES*/
 
+#define BOUNCE_ON_BORDERS
+
 /* number of threads: how many cores do you have? */
-#define NT 4
+#define THREADS 4
 
 /* particle size */
 #define PSIZE 1.0f
 
 /* gravity center weight */
-#define M 1000000.0f
+#define M 100000000.0f
 
 #define RANDF               (rand()/(float)RAND_MAX)
 
@@ -85,7 +83,7 @@ void init_particles()
 	}
 }
 
-void loop_particles(int from, int to)
+void loop_particles(int from, int to, float updateTime)
 {
 	int i;
 	float x1, y1, distance, mAccel, ang;
@@ -107,9 +105,8 @@ void loop_particles(int from, int to)
 			mAccel = -gamma*M/distance;
 
 			/* acceleration limiter */
-			if(mAccel<-MM) mAccel=-MM;
-			if(mAccel>MM) mAccel=MM;
-
+			if(mAccel<-ACLIM) mAccel=-ACLIM;
+	
 			/* get angle between particle and gravity center */
 			ang = atan2(y1,x1);
 
@@ -124,26 +121,22 @@ void loop_particles(int from, int to)
 		p->yAccel -= ATTR * p->ySpeed;
 
 		/* update speeds */
-		p->xSpeed += p->xAccel;
-		p->ySpeed += p->yAccel;
-
-		/* speed limiter */
-		if(p->xSpeed>MAXMAX) p->xSpeed=MAXMAX;
-		if(p->xSpeed<-MAXMAX) p->xSpeed=-MAXMAX;
-		if(p->ySpeed>MAXMAX) p->ySpeed=MAXMAX;
-		if(p->ySpeed<-MAXMAX) p->ySpeed=-MAXMAX;
+		p->xSpeed += p->xAccel*updateTime;
+		p->ySpeed += p->yAccel*updateTime;
 
 #ifdef USE_LINES
 		p->ox = p->x;
 		p->oy = p->y;
 #endif
-		p->x += p->xSpeed;
-		p->y += p->ySpeed;
+		p->x += p->xSpeed*updateTime;
+		p->y += p->ySpeed*updateTime;
 
+#ifdef BOUNCE_ON_BORDERS
 		if(p->x<0) {p->ox+=WIDTH; p->x+=WIDTH;}
 		if(p->x>=WIDTH) {p->ox-=WIDTH; p->x-=WIDTH;}
 		if(p->y<0) {p->oy+=HEIGHT; p->y+=HEIGHT;}
 		if(p->y>=HEIGHT) {p->oy-=HEIGHT; p->y-=HEIGHT;}
+#endif
 	}
 }
 
@@ -251,13 +244,16 @@ long msec()
 
 void *particles_thread(void *arg)
 {
-	long tmr;
+	long tmr, lastRefresh;
 	thread_s *t = (thread_s *) arg;
 
+	lastRefresh = msec();
 	while(!stop)
 	{
 		tmr = msec();
-		loop_particles(t->from, t->to);
+		loop_particles(t->from, t->to, (msec()-lastRefresh)/1000.0f);
+
+		lastRefresh = msec();
 		tmr = msec() - tmr;
 
 		if(tmr<30)
@@ -269,22 +265,24 @@ void *particles_thread(void *arg)
 
 int main(int argc, char *argv[])
 {
-	pthread_t threads[NT];
+	int i;
 	long tmr;
+	
+	pthread_t threads[THREADS];
 	SDL_Event e;
-	thread_s tmp[NT];
+	thread_s tmp[THREADS];
 
 	srand(time(NULL));
 
 	init_particles();
 	init_graphics();
 
-	for(tmr=0;tmr<NT;tmr++)
+	for(i=0;i<THREADS;i++)
 	{
-		tmp[tmr].from = (N/NT)*tmr;
-		tmp[tmr].to = (N/NT)*(tmr+1);
+		tmp[i].from = (N/THREADS)*i;
+		tmp[i].to = (N/THREADS)*(i+1);
 
-		pthread_create(&threads[tmr], NULL, particles_thread, (void *)&tmp[tmr]);
+		pthread_create(&threads[i], NULL, particles_thread, (void *)&tmp[i]);
 	}
 
 	while(!stop)
@@ -304,3 +302,4 @@ int main(int argc, char *argv[])
 	SDL_Quit();
 	return 0;
 }
+
