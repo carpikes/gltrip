@@ -39,8 +39,10 @@
 #endif
 
 /* set here your screen resolution */
-#define WIDTH                1024
-#define HEIGHT               768
+#ifndef CMAKE_BUILD
+	#define WIDTH                1024
+	#define HEIGHT               768
+#endif
 #define BPP                  32
 
 /* particle count */
