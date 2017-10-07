@@ -54,9 +54,6 @@
 /* acceleration limiter */
 #define ACLIM 8000.0f
 
-/* fluid friction */
-#define ATTR 1.8f
-
 /* particles transparency: 0.10 if you enable USE_LINES,
  * otherwise keep > 0.30 */
 #define ALPHA 0.50f
@@ -87,6 +84,7 @@ typedef struct
 static volatile int xM, yM, cM = 0;
 static volatile int stop = 0;
 static volatile float pSize = 1.0f;
+static volatile float pAttr = 1.8f;
 
 SDL_Surface *surface;
 particle_s particles[N];
@@ -147,8 +145,8 @@ void loop_particles(int from, int to, float updateTime)
 			p->xAccel = p->yAccel = 0;
 
 		/* fluid friction */
-		p->xAccel -= ATTR * p->xSpeed;
-		p->yAccel -= ATTR * p->ySpeed;
+		p->xAccel -= pAttr * p->xSpeed;
+		p->yAccel -= pAttr * p->ySpeed;
 
 		/* update speeds */
 		p->xSpeed += p->xAccel*updateTime;
@@ -219,6 +217,10 @@ void event(SDL_Event *e)
 		pSize = pSize < 10.0f ? pSize + 0.5f : 10.0f;
 	if(e->type==SDL_KEYDOWN && e->key.keysym.sym==SDLK_MINUS)
 		pSize = pSize > 0.0f ? pSize - 0.5f : 0.01f;
+	if(e->type==SDL_KEYDOWN && e->key.keysym.sym==SDLK_a)
+		pAttr = pAttr < 10.0f ? pAttr + 0.5f : 10.0f;
+	if(e->type==SDL_KEYDOWN && e->key.keysym.sym==SDLK_s)
+		pAttr = pAttr > 0.0f ? pAttr - 0.5f : 0.01f;
 	s = SDL_GetMouseState(&x,&y);
 	if(s & SDL_BUTTON(1))
 	{
