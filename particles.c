@@ -66,9 +66,6 @@
 
 #define BOUNCE_ON_BORDERS
 
-/* particle size */
-#define PSIZE 1.0f
-
 /* gravity center weight */
 #define M 100000000.0f
 
@@ -89,6 +86,7 @@ typedef struct
 
 static volatile int xM, yM, cM = 0;
 static volatile int stop = 0;
+static volatile float pSize = 1.0f;
 
 SDL_Surface *surface;
 particle_s particles[N];
@@ -217,7 +215,10 @@ void event(SDL_Event *e)
 	if(e->type==SDL_QUIT || (e->type==SDL_KEYDOWN &&
 				e->key.keysym.sym==SDLK_ESCAPE))
 		stop = 1;
-
+	if(e->type==SDL_KEYDOWN && e->key.keysym.sym==SDLK_PLUS)
+		pSize = pSize < 10.0f ? pSize + 0.5f : 10.0f;
+	if(e->type==SDL_KEYDOWN && e->key.keysym.sym==SDLK_MINUS)
+		pSize = pSize > 0.0f ? pSize - 0.5f : 0.01f;
 	s = SDL_GetMouseState(&x,&y);
 	if(s & SDL_BUTTON(1))
 	{
@@ -244,7 +245,7 @@ void render()
 	glTranslatef(0.375,0.375,0);
 
 	glBlendFunc(GL_SRC_ALPHA,GL_DST_ALPHA);
-	glPointSize(PSIZE);
+	glPointSize(pSize);
 
 #ifdef USE_LINES
 	glBegin(GL_LINES);
